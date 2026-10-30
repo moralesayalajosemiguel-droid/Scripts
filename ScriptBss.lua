@@ -17,7 +17,7 @@ LocalPlayer.CharacterAdded:Connect(function(char)
 end)
 
 local NatroConfig = {
-    Field = "Dandelion Field",
+    Field = "", -- Pendiente de configurar
     ConvertAtPollenPercent = 100,
     AutoSprinkler = true
 }
@@ -38,6 +38,11 @@ local HiveCoordinates = {
     Vector3.new(-4.38,   5.94, 331.48)  -- Colmena 6
 }
 
+-- Estructura vacía lista para tus propias rutas y campos
+local FieldRoutes = {
+    -- Ejemplo de formato que usarás después:
+    -- [1] = { ["NombreCampo"] = { Vector3.new(...), Vector3.new(...) } }
+}
 
 local StatsReader = {}
 function StatsReader.GetPollen()
@@ -167,14 +172,3 @@ task.spawn(function()
         elseif NatroState.CurrentState == "CONVERTING" then
             VirtualInputManager:SendKeyEvent(true, Enum.KeyCode.E, false, game)
             task.wait(0.1)
-            VirtualInputManager:SendKeyEvent(false, Enum.KeyCode.E, false, game)
-            
-            while StatsReader.GetPollen() > 0 do
-                task.wait(1)
-            end
-            
-            task.wait(2)
-            NatroState.CurrentState = "WALK_TO_FIELD"
-        end
-    end
-end)
