@@ -1,4 +1,4 @@
-print("[BSS Solara] Iniciando script de búsqueda (6 colmenas)...")
+print("[BSS Solara] Iniciando script multicuenta (6 colmenas)...")
 
 local Players = game:GetService("Players")
 local VirtualInputManager = game:GetService("VirtualInputManager")
@@ -24,7 +24,7 @@ task.wait(3.5)
 
 -- // 2. LISTA COMPLETA DE LAS 6 COLMENAS //
 local listaColmenas = {
-    Vector3.new(-183.75, 5.94, 330.39), -- Colmena 1 (La primera original)
+    Vector3.new(-183.75, 5.94, 330.39), -- Colmena 1
     Vector3.new(-150.09, 5.94, 331.43), -- Colmena 2[cite: 12]
     Vector3.new(-113.49, 5.94, 330.35), -- Colmena 3[cite: 12]
     Vector3.new(-74.88, 5.94, 329.33),  -- Colmena 4[cite: 12]
@@ -32,7 +32,7 @@ local listaColmenas = {
     Vector3.new(-3.53, 5.94, 331.19)    -- Colmena 6[cite: 12]
 }
 
--- Función para verificar si la colmena actual está libre mediante el texto de la pantalla
+-- Función para verificar si la colmena está libre y descartar "Send Trade" u ocupadas
 local function esColmenaLibre()
     local playerGui = LocalPlayer:FindFirstChild("PlayerGui")
     if playerGui then
@@ -45,6 +45,12 @@ local function esColmenaLibre()
                     local textoActual = string.lower(textBox.Text)
                     print("[BSS Debug] Texto detectado: " .. textBox.Text)
                     
+                    -- Si aparece "send trade", se considera ocupada de inmediato
+                    if string.find(textoActual, "send trade") then
+                        return false
+                    end
+                    
+                    -- Solo retorna true si dice estrictamente "claim hive"
                     if string.find(textoActual, "claim hive") then
                         return true
                     end
@@ -72,17 +78,24 @@ for indice, destino in ipairs(listaColmenas) do
             task.wait(0.1)
         until (character.HumanoidRootPart.Position - destino).Magnitude < 5 or (tick() - startTime) > 7
         
-        task.wait(0.6) -- Pausa breve para que cargue la interfaz visual
+        task.wait(0.8) -- Pausa para dar tiempo a que las cuentas sincronicen el estado en pantalla
         
         -- BLOQUE IF / ELSE
         if esColmenaLibre() then
             print("✅ IF: ¡Colmena #" .. indice .. " libre detectada!")
             pressKey(Enum.KeyCode.E) -- Reclamar con la E
-            print("🎉 ¡Colmena reclamada con éxito! Finalizando script.")
-            break -- Rompe el bucle porque ya conseguimos colmena
+            task.wait(0.4) -- Breve pausa para procesar el reclamo
+            
+            -- Doble verificación: por si otra cuenta de las 5 la reclamó al mismo milisegundo
+            if not esColmenaLibre() then
+                print("⚠️ La colmena fue tomada por otra cuenta simultáneamente. Saltando...")
+            else
+                print("🎉 ¡Colmena reclamada con éxito! Finalizando script.")
+                break -- Rompe el bucle porque ya se quedó con su colmena
+            end
         else
-            -- ELSE: Si está ocupada, avanza a la siguiente
-            print("❌ ELSE: Colmena #" .. indice .. " ocupada. Saltando a la siguiente...")
+            -- ELSE: Si está ocupada o muestra "Send Trade", salta a la siguiente
+            print("❌ ELSE: Colmena #" .. indice .. " ocupada o con trade. Saltando a la siguiente...")
         end
     end
     
