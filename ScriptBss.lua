@@ -38,22 +38,6 @@ local HiveCoordinates = {
     Vector3.new(-4.38,   5.94, 331.48)  -- Colmena 6
 }
 
--- Rutas de salida hacia fields específicas según el número de colmena
-local FieldRoutes = {
-    [1] = {
-        ["Dandelion Field"] = {
-            Vector3.new(-187.26, 5.94, 330.80),
-            Vector3.new(-187.91, 4.01, 297.81),
-            Vector3.new(-117.52, 4.01, 296.43),
-            Vector3.new(-118.32, 4.70, 256.09),
-            Vector3.new(-114.45, 4.70, 256.01),
-            Vector3.new(-112.48, 4.01, 248.08),
-            Vector3.new(-107.58, 4.42, 236.82),
-            Vector3.new(-37.22, 4.01, 235.43),
-            Vector3.new(-37.60, 4.01, 216.37)
-        }
-    }
-}
 
 local StatsReader = {}
 function StatsReader.GetPollen()
