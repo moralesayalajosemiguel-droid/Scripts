@@ -1,115 +1,95 @@
-print("[BSS Solara] Iniciando script multicuenta ultra-robusto...")
-
 local Players = game:GetService("Players")
 local VirtualInputManager = game:GetService("VirtualInputManager")
 local LocalPlayer = Players.LocalPlayer
+local Character = LocalPlayer.Character or LocalPlayer.CharacterAdded:Wait()
+local Humanoid = Character:WaitForChild("Humanoid")
+local RootPart = Character:WaitForChild("HumanoidRootPart")
 
-math.randomseed(os.time() + LocalPlayer.UserId)
-
--- Función auxiliar para presionar teclas de forma segura
-local function pressKey(keyCode)
-    VirtualInputManager:SendKeyEvent(true, keyCode, false, game)
-    task.wait(0.05)
-    VirtualInputManager:SendKeyEvent(false, keyCode, false, game)
-end
-
--- // 1. PASO INICIAL: Reiniciar personaje (ESC -> R -> ENTER) //
-print("[BSS Solara] Reiniciando personaje...")
-pressKey(Enum.KeyCode.Escape)
-task.wait(0.4)
-pressKey(Enum.KeyCode.R)
-task.wait(0.4)
-pressKey(Enum.KeyCode.Return)
-
-task.wait(3.5)
-
--- // 2. LISTA DE LAS 6 COLMENAS //
-local listaColmenas = {
-    Vector3.new(-183.75, 5.94, 330.39), -- Colmena 1
-    Vector3.new(-150.09, 5.94, 331.43), -- Colmena 2
-    Vector3.new(-113.49, 5.94, 330.35), -- Colmena 3
-    Vector3.new(-74.88, 5.94, 329.33),  -- Colmena 4
-    Vector3.new(-40.20, 5.94, 329.98),  -- Colmena 5
-    Vector3.new(-3.53, 5.94, 331.19)    -- Colmena 6
+-- Las 6 coordenadas exactas de las colmenas que registraste
+local HiveCoordinates = {
+    Vector3.new(-187.24, 5.94, 330.23), -- Colmena 1[cite: 2]
+    Vector3.new(-148.78, 5.94, 330.25), -- Colmena 2[cite: 2]
+    Vector3.new(-113.71, 5.94, 330.30), -- Colmena 3[cite: 2]
+    Vector3.new(-76.91,  5.94, 329.38), -- Colmena 4[cite: 2]
+    Vector3.new(-41.15,  5.94, 330.94), -- Colmena 5[cite: 2]
+    Vector3.new(-4.38,   5.94, 331.48)  -- Colmena 6[cite: 2]
 }
 
--- Función para leer el texto del botón de la interfaz
-local function obtenerTextoBoton()
-    local playerGui = LocalPlayer:FindFirstChild("PlayerGui")
-    if playerGui then
-        local screenGui = playerGui:FindFirstChild("ScreenGui")
-        if screenGui then
-            local activateButton = screenGui:FindFirstChild("ActivateButton")
-            if activateButton then
-                local textBox = activateButton:FindFirstChild("TextBox")
-                if textBox then
-                    return string.lower(textBox.Text)
-                end
-            end
+local HiveManager = {}
+HiveManager.MyHivePosition = nil
+HiveManager.IsClaimed = false
+
+-- Función de movimiento seguro hacia la colmena
+local function walkTo(targetPos)
+    Humanoid:MoveTo(targetPos)
+    local reached = false
+    local conn
+    conn = Humanoid.MoveToFinished:Connect(function()
+        reached = true
+    end)
+    
+    local start = tick()
+    while not reached and (tick() - start) < 10 do
+        if (RootPart.Position - targetPos).Magnitude < 4 then
+            break
         end
+        task.wait(0.1)
     end
-    return ""
+    if conn then conn:Disconnect() end
 end
 
--- // 3. BUCLE DE RECORRIDO Y VALIDACIÓN //
-for indice, destino in ipairs(listaColmenas) do
-    print("[BSS] Moviéndose a la colmena #" .. indice)
+-- Función de escaneo, validación y reclamo estricto
+function HiveManager.FindAndClaimHive()
+    -- Jitter de tiempo para evitar conflictos en multicuenta
+    task.wait((LocalPlayer.UserId % 5) * 0.5)
     
-    local character = LocalPlayer.Character or LocalPlayer.CharacterAdded:Wait()
-    if character and character:FindFirstChild("Humanoid") and character:FindFirstChild("HumanoidRootPart") then
-        local humanoid = character.Humanoid
+    for index, pos in ipairs(HiveCoordinates) do
+        print("[HiveManager] Caminando hacia la colmena #" .. index)
+        walkTo(pos)
+        task.wait(0.6) -- Pausa corta para estabilizar la UI al llegar
         
-        humanoid:MoveTo(destino)
-        
-        -- Esperar a que el personaje llegue al destino (con límite de 7 segundos)
-        local startTime = tick()
-        repeat
-            task.wait(0.1)
-        until (character.HumanoidRootPart.Position - destino).Magnitude < 4 or (tick() - startTime) > 7
-        
-        -- Desincronización aleatoria para evitar colisiones idénticas en milisegundos exactos
-        task.wait(math.random(10, 50) / 100)
-        
-        -- ESPERA ACTIVA: Dar un margen de hasta 1.5 segundos para que la UI cargue el texto correctamente
-        local textoEncontrado = ""
-        local tiempoEsperaTexto = tick()
-        repeat
-            textoEncontrado = obtenerTextoBoton()
-            if string.find(textoEncontrado, "claim hive") or string.find(textoEncontrado, "send trade") then
-                break
-            end
-            task.wait(0.1)
-        until (tick() - tiempoEsperaTexto) > 1.5
-        
-        print("[BSS Debug] Colmena #" .. indice | " - Texto detectado: " .. textoEncontrado)
-        
-        -- Verificar si está disponible de verdad
-        if string.find(textoEncontrado, "claim hive") and not string.find(textoEncontrado, "send trade") then
-            print("✅ IF: ¡Colmena #" .. indice .. " libre! Intentando reclamar...")
+        -- Verificar el texto en la interfaz (ActivateButton / TextBox)
+        local activateBtn = LocalPlayer.PlayerGui:FindFirstChild("ActivateButton", true)
+        if activateBtn and activateBtn:FindFirstChild("TextBox") then
+            local uiText = activateBtn.TextBox.Text:lower()
             
-            -- Enviar múltiples pulsaciones rápidas de 'E' para asegurar el slot
-            for i = 1, 3 do
-                pressKey(Enum.KeyCode.E)
+            -- CASO 1: Colmena libre ("Claim Hive")[cite: 3]
+            if string.find(uiText, "claim hive") then
+                print("[HiveManager] ¡Colmena #" .. index .. " libre! Reclamando...")
+                
+                -- Simular pulsación de la tecla 'E'
+                VirtualInputManager:SendKeyEvent(true, Enum.KeyCode.E, false, game)
                 task.wait(0.1)
+                VirtualInputManager:SendKeyEvent(false, Enum.KeyCode.E, false, game)
+                task.wait(1.5)
+                
+                -- Guardar posición, fijar estado y quedarse quieto en este punto exacto
+                HiveManager.MyHivePosition = RootPart.CFrame
+                HiveManager.IsClaimed = true
+                print("[HiveManager] ¡Colmena reclamada con éxito! Quedándose quieto en el punto y pasando al siguiente paso.")
+                return true
+                
+            -- CASO 2: La colmena ya nos pertenece ("To Make Honey...")[cite: 5]
+            elseif string.find(uiText, "to make honey") then
+                print("[HiveManager] Esta colmena ya nos pertenece. Quedándose en el punto.")
+                HiveManager.MyHivePosition = RootPart.CFrame
+                HiveManager.IsClaimed = true
+                return true
+                
+            -- CASO 3: Ocupada por otro jugador ("Send Trade Request to...")[cite: 4]
+            elseif string.find(uiText, "send trade request") then
+                print("[HiveManager] Colmena #" .. index .. " ocupada. Saltando a la siguiente...")
             end
-            
-            task.wait(1.0) -- Esperar respuesta del servidor
-            
-            -- Comprobación post-intento
-            local textoDespues = obtenerTextoBoton()
-            if string.find(textoDespues, "send trade") then
-                print("❌ Conflicto: Otra cuenta tomó la colmena (Send Trade detectado). Saltando...")
-            else
-                print("🎉 ¡Colmena #" .. indice .. " reclamada con éxito! Finalizando script.")
-                break -- Salir del bucle con éxito
-            end
-        else
-            -- ELSE: Si está ocupada o no cargó como libre, pasa a la siguiente
-            print("❌ ELSE: Colmena #" .. indice .. " ocupada o no disponible. Saltando...")
         end
     end
     
-    task.wait(0.3)
+    print("[HiveManager] No se encontró ninguna colmena disponible en esta pasada.")
+    return false
 end
 
-print("[BSS] Proceso de selección de colmena completado.")
+-- Ejecución inicial del reclamo
+local success = HiveManager.FindAndClaimHive()
+if success then
+    -- AQUÍ PROSIGUE CON EL SIGUIENTE PASO (ej. ir al campo de farmeo)
+    print(">>> Siguiente paso: Iniciando trayecto hacia el campo de farmeo...")
+end
