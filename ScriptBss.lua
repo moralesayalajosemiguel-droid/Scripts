@@ -171,4 +171,8 @@ task.spawn(function()
             
         elseif NatroState.CurrentState == "CONVERTING" then
             VirtualInputManager:SendKeyEvent(true, Enum.KeyCode.E, false, game)
-            task.wait(0.1)
+task.wait(2)
+            NatroState.CurrentState = "WALK_TO_FIELD"
+        end
+    end
+end)
