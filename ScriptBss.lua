@@ -148,9 +148,7 @@ task.spawn(function()
                 end
                 print("[Natro] ¡Llegada al campo completada!")
                 NatroState.CurrentState = "FARMING"
-            else
-                print("[Natro] No hay ruta configurada para esta colmena hacia este campo.")
-                task.wait(5)
+
             end
             
         elseif NatroState.CurrentState == "FARMING" then
