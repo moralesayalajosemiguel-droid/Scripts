@@ -1,17 +1,20 @@
-print("[BSS Solara] Iniciando script multicuenta (6 colmenas)...")
+print("[BSS Solara] Iniciando script multicuenta con desincronización...")
 
 local Players = game:GetService("Players")
 local VirtualInputManager = game:GetService("VirtualInputManager")
 local LocalPlayer = Players.LocalPlayer
 
--- Función auxiliar para presionar teclas de forma segura
+-- Generar una semilla aleatoria basada en el tiempo actual para cada cliente
+math.randomseed(os.time() + LocalPlayer.UserId)
+
+-- Función auxiliar para presionar teclas
 local function pressKey(keyCode)
     VirtualInputManager:SendKeyEvent(true, keyCode, false, game)
     task.wait(0.05)
     VirtualInputManager:SendKeyEvent(false, keyCode, false, game)
 end
 
--- // 1. PASO INICIAL: Reiniciar personaje (ESC -> R -> ENTER) //
+-- // 1. REINICIO INICIAL //
 print("[BSS Solara] Reiniciando personaje...")
 pressKey(Enum.KeyCode.Escape)
 task.wait(0.4)
@@ -19,21 +22,20 @@ pressKey(Enum.KeyCode.R)
 task.wait(0.4)
 pressKey(Enum.KeyCode.Return)
 
--- Esperar a que el personaje muera y reaparezca
 task.wait(3.5)
 
--- // 2. LISTA COMPLETA DE LAS 6 COLMENAS //
+-- // 2. LISTA DE COLMENAS //
 local listaColmenas = {
-    Vector3.new(-183.75, 5.94, 330.39), -- Colmena 1
-    Vector3.new(-150.09, 5.94, 331.43), -- Colmena 2[cite: 12]
-    Vector3.new(-113.49, 5.94, 330.35), -- Colmena 3[cite: 12]
-    Vector3.new(-74.88, 5.94, 329.33),  -- Colmena 4[cite: 12]
-    Vector3.new(-40.20, 5.94, 329.98),  -- Colmena 5[cite: 12]
-    Vector3.new(-3.53, 5.94, 331.19)    -- Colmena 6[cite: 12]
+    Vector3.new(-183.75, 5.94, 330.39),
+    Vector3.new(-150.09, 5.94, 331.43),
+    Vector3.new(-113.49, 5.94, 330.35),
+    Vector3.new(-74.88, 5.94, 329.33),
+    Vector3.new(-40.20, 5.94, 329.98),
+    Vector3.new(-3.53, 5.94, 331.19)
 }
 
--- Función para verificar si la colmena está libre y descartar "Send Trade" u ocupadas
-local function esColmenaLibre()
+-- Función para obtener el texto actual del botón de interacción
+local function obtenerTextoBoton()
     local playerGui = LocalPlayer:FindFirstChild("PlayerGui")
     if playerGui then
         local screenGui = playerGui:FindFirstChild("ScreenGui")
@@ -42,26 +44,15 @@ local function esColmenaLibre()
             if activateButton then
                 local textBox = activateButton:FindFirstChild("TextBox")
                 if textBox then
-                    local textoActual = string.lower(textBox.Text)
-                    print("[BSS Debug] Texto detectado: " .. textBox.Text)
-                    
-                    -- Si aparece "send trade", se considera ocupada de inmediato
-                    if string.find(textoActual, "send trade") then
-                        return false
-                    end
-                    
-                    -- Solo retorna true si dice estrictamente "claim hive"
-                    if string.find(textoActual, "claim hive") then
-                        return true
-                    end
+                    return string.lower(textBox.Text)
                 end
             end
         end
     end
-    return false
+    return ""
 end
 
--- // 3. BUCLE DE RECORRIDO Y VALIDACIÓN //
+-- // 3. BUCLE PRINCIPAL //
 for indice, destino in ipairs(listaColmenas) do
     print("[BSS] Moviéndose a la colmena #" .. indice)
     
@@ -69,37 +60,44 @@ for indice, destino in ipairs(listaColmenas) do
     if character and character:FindFirstChild("Humanoid") and character:FindFirstChild("HumanoidRootPart") then
         local humanoid = character.Humanoid
         
-        -- Caminar hacia la colmena actual
         humanoid:MoveTo(destino)
         
-        -- Esperar a que llegue (con límite de 7 segundos)
+        -- Esperar llegada al punto
         local startTime = tick()
         repeat
             task.wait(0.1)
         until (character.HumanoidRootPart.Position - destino).Magnitude < 5 or (tick() - startTime) > 7
         
-        task.wait(0.8) -- Pausa para dar tiempo a que las cuentas sincronicen el estado en pantalla
+        -- Retardo aleatorio para desincronizar el reclamo entre múltiples cuentas
+        local tiempoEspera = math.random(20, 90) / 100 -- Entre 0.2s y 0.9s
+        task.wait(tiempoEspera)
         
-        -- BLOQUE IF / ELSE
-        if esColmenaLibre() then
-            print("✅ IF: ¡Colmena #" .. indice .. " libre detectada!")
-            pressKey(Enum.KeyCode.E) -- Reclamar con la E
-            task.wait(0.4) -- Breve pausa para procesar el reclamo
+        local textoActual = obtenerTextoBoton()
+        print("[BSS Debug] Texto detectado: " .. textoActual)
+        
+        -- Si dice estrictamente "claim hive" y NO tiene "send trade"
+        if string.find(textoActual, "claim hive") and not string.find(textoActual, "send trade") then
+            print("✅ Tentativa de reclamo en Colmena #" .. indice)
+            pressKey(Enum.KeyCode.E)
             
-            -- Doble verificación: por si otra cuenta de las 5 la reclamó al mismo milisegundo
-            if not esColmenaLibre() then
-                print("⚠️ La colmena fue tomada por otra cuenta simultáneamente. Saltando...")
+            -- Esperar a que el servidor actualice el reclamo
+            task.wait(1.2)
+            
+            -- Re-evaluar estado tras presionar E
+            local textoConfirmacion = obtenerTextoBoton()
+            
+            if string.find(textoConfirmacion, "send trade") then
+                print("❌ Pérdida de conflicto: La colmena fue tomada por otra cuenta. Saltando...")
             else
-                print("🎉 ¡Colmena reclamada con éxito! Finalizando script.")
-                break -- Rompe el bucle porque ya se quedó con su colmena
+                print("🎉 ¡Colmena #" .. indice .. " reclamada y confirmada!")
+                break -- Salir del bucle con éxito
             end
         else
-            -- ELSE: Si está ocupada o muestra "Send Trade", salta a la siguiente
-            print("❌ ELSE: Colmena #" .. indice .. " ocupada o con trade. Saltando a la siguiente...")
+            print("❌ ELSE: Colmena #" .. indice .. " ocupada o con trade. Pasando a la siguiente...")
         end
     end
     
-    task.wait(0.3)
+    task.wait(0.2)
 end
 
-print("[BSS] Proceso de selección de colmena completado.")
+print("[BSS] Proceso de selección completado.")
